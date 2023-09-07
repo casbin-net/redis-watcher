@@ -22,6 +22,17 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Install Chocolatey
+      run: |
+          Set-ExecutionPolicy Bypass -Scope Process -Force; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+      shell: powershell
+  
+    - name: Install Redis
+      run: choco install redis-64
+  
+    - name: Start Redis Server
+      run: redis-server
+
     - name: Setup .NET SDK
       uses: actions/setup-dotnet@v2
       with:
