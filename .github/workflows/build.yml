@@ -57,7 +57,7 @@ jobs:
            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=json,cobertura,lcov,teamcity,opencover
 
     - name: Upload coverage
-      #if: github.repository_owner == 'casbin-net' && github.event_name == 'push'
+      if: github.repository_owner == 'casbin-net' && github.event_name == 'push'
       run: |
         dotnet tool install coveralls.net --version 3.0.0 --tool-path tools;
         $CommitAuthor = git show -s --pretty=format:"%cn";
@@ -88,7 +88,7 @@ jobs:
   dry-run-semantic-release:
     runs-on: ubuntu-latest
     needs: build
-    #if: github.repository_owner == 'casbin-net' && github.event_name == 'push'
+    if: github.repository_owner == 'casbin-net' && github.event_name == 'push'
     
     steps:
       - name: Checkout
