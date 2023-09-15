@@ -9,7 +9,9 @@
   <PropertyGroup>
     <PackageId>Casbin.Watcher.Redis</PackageId>
     <PackageIcon>casbin.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <Authors>Casbin.NET</Authors>
+    <Description>Redis watcher for Casbin.NET</Description>
     <RepositoryType>GIT</RepositoryType>
     <RepositoryUrl>https://github.com/casbin-net/redis-watcher</RepositoryUrl>
     <Copyright>Apache License 2.0</Copyright>
@@ -32,4 +34,9 @@
   <ItemGroup>
     <None Include="casbin.png" Pack="true" Visible="false" PackagePath="" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
 </Project>
