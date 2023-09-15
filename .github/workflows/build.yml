@@ -139,12 +139,6 @@ jobs:
     - name: Pack packages
       run: |
         $LastTag = git describe --tags (git rev-list --tags --max-count=1);
-
-        if [ -z "$LastTag" ]; then
-          echo "Last tag is not available. Setting to a fixed string."
-          LastTag="v2.0.0"
-        fi
-
         echo "Last tag is: $LastTag";
         $Version = ($LastTag).TrimStart('v');
         echo "Publishing version: $Version";
