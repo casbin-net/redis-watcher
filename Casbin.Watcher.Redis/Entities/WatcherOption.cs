@@ -1,6 +1,6 @@
 namespace Casbin.Watcher.Redis.Entities
 {
-    public class WatcherOption : IWatcherOption
+    public class WatcherOption : IWatcherOptions
     {
         public bool Async { get; set; } 
         public string Channel { get; set; } 
