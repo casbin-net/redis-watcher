@@ -31,7 +31,7 @@ jobs:
       run: choco install redis-64
   
     - name: Start Redis Server
-      run: "C:\ProgramData\chocolatey\lib\redis-64\tools\redis-server.exe"
+      run: “C:\ProgramData\chocolatey\lib\redis-64\tools\redis-server.exe”
 
     - name: Setup .NET SDK
       uses: actions/setup-dotnet@v3
