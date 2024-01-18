@@ -2,270 +2,183 @@
 using System.Threading.Tasks;
 using Casbin.Persist;
 using Casbin.Watcher.Redis.Entities;
-using Casbin.Watcher.Redis.Extensions;
 using StackExchange.Redis;
 
-namespace Casbin.Watcher.Redis
+namespace Casbin.Watcher.Redis;
+
+public class RedisWatcher : IWatcher
 {
-    public class RedisWatcher : RedisWatcher<Message>
-        
+    private readonly IConnectionMultiplexer _connection;
+    private readonly RedisChannel _channel;
+    private readonly IWatcherOptions _options;
+
+    private ISubscriber _subscriber;
+    private Action _callback;
+    private Func<Task> _asyncCallback;
+    private Action<IPolicyChangeMessage> _callbackWithMessage;
+    private Func<IPolicyChangeMessage, Task> _asyncCallbackWithMessage;
+
+    public RedisWatcher(string addr = "localhost", IWatcherOptions options = null)
     {
-        public RedisWatcher(string addr = "localhost") : base(addr)
-        {
-            
-        }
-        
-        public RedisWatcher(string addr, IWatcherOption option) : base(addr, option)
-        {
-            
-        }
-    }
-    
-    public class RedisWatcher<TMessage> : IWatcher
-        where TMessage : IMessage
-    {
-        public IWatcherOption WatcherOption { get; }
-        private readonly IConnectionMultiplexer _connection;
-        private ISubscriber _subscriber;
-        
-        private Action _callback;
-        private Func<Task> _asyncCallback;
-        private Action<TMessage> _callbackWithMessage;
-        private Func<TMessage, Task> _asyncCallbackWithMessage;
-        
-        private readonly RedisChannel _channel = "/casbin";
+        _options = options ?? new WatcherOptions();
 
-        public RedisWatcher(string addr = "localhost")
-        {
-            WatcherOption = new WatcherOption();
-            WatcherOption.LocalId = Guid.NewGuid().ToString();
-            WatcherOption.Channel = _channel;
+        Id = _options.LocalId ?? Guid.NewGuid().ToString();
+        _channel = new RedisChannel(_options.Channel ?? "/casbin", RedisChannel.PatternMode.Literal);
+        _connection = ConnectionMultiplexer.Connect(addr);
 
-            _connection = ConnectionMultiplexer.Connect(addr);
-
+        if (_options.Async)
+            SubscribeAsync();
+        else
             Subscribe();
-        }
+    }
 
-        public RedisWatcher(string addr, IWatcherOption option)
+    ~RedisWatcher() => Close();
+
+    public string Id { get; private set; }
+
+    #region IFullWatcher
+
+    public virtual void SetUpdateCallback(Action callback)
+    {
+        _callback = callback;
+    }
+
+    public virtual void SetUpdateCallback(Func<Task> callback)
+    {
+        _asyncCallback = callback;
+    }
+
+    public virtual void Update()
+    {
+        var message = new Message
         {
-            WatcherOption = option;
-            WatcherOption.LocalId ??= Guid.NewGuid().ToString();
-            if (WatcherOption.Channel is null)
-            {
-                WatcherOption.Channel = _channel;
-            }
-            else
-            {
-                _channel = option.Channel;
-            }
+            Operation = PolicyOperation.SavePolicy,
+            Id = Id,
+        };
 
-            _connection = ConnectionMultiplexer.Connect(addr);
-            if (WatcherOption.Async)
-            {
-                SubscribeAsync();
-            }
-            else
-            {
-                Subscribe();
-            }
-        }
+        _subscriber.Publish(_channel, message.ToRedisValue());
+    }
 
-        ~RedisWatcher() => Close();
-
-        private void Subscribe()
+    public virtual async Task UpdateAsync()
+    {
+        var message = new Message
         {
-            _subscriber = _connection.GetSubscriber();
+            Operation = PolicyOperation.SavePolicy,
+            Id = Id,
+        };
 
-            _subscriber.Subscribe(_channel, (RedisChannel _, RedisValue value) =>
+        await _subscriber.PublishAsync(_channel, message.ToRedisValue());
+    }
+
+    #endregion
+
+    #region IIncrementalWatcher
+
+    public virtual void SetUpdateCallback(Action<IPolicyChangeMessage> callback)
+    {
+        _callbackWithMessage = callback;
+    }
+
+    public virtual void SetUpdateCallback(Func<IPolicyChangeMessage, Task> callback)
+    {
+        _asyncCallbackWithMessage = callback;
+    }
+
+    public virtual void Update(IPolicyChangeMessage policyMessage)
+    {
+        var message = new Message
+        {
+            Id = Id,
+            Operation = policyMessage.Operation,
+            Section = policyMessage.Section,
+            PolicyType = policyMessage.PolicyType,
+            FieldIndex = policyMessage.FieldIndex,
+            Values = policyMessage.Values,
+            NewValues = policyMessage.NewValues,
+            ValuesList = policyMessage.ValuesList,
+            NewValuesList = policyMessage.NewValuesList
+        };
+
+        _subscriber.Publish(_channel, message.ToRedisValue());
+    }
+
+    public virtual async Task UpdateAsync(IPolicyChangeMessage policyMessage)
+    {
+        var message = new Message
+        {
+            Id = Id,
+            Operation = policyMessage.Operation,
+            Section = policyMessage.Section,
+            PolicyType = policyMessage.PolicyType,
+            FieldIndex = policyMessage.FieldIndex,
+            Values = policyMessage.Values,
+            NewValues = policyMessage.NewValues,
+            ValuesList = policyMessage.ValuesList,
+            NewValuesList = policyMessage.NewValuesList
+        };
+
+        await _subscriber.PublishAsync(_channel, message.ToRedisValue());
+    }
+
+    #endregion
+
+    #region IReadOnlyWatcher
+
+    public virtual void Close()
+    {
+        _subscriber?.UnsubscribeAll();
+        _connection?.Close();
+    }
+
+    public virtual async Task CloseAsync()
+    {
+        await _subscriber?.UnsubscribeAllAsync();
+        await _connection?.CloseAsync();
+    }
+
+    #endregion
+
+    private void Subscribe()
+    {
+        _subscriber = _connection.GetSubscriber();
+
+        _subscriber.Subscribe(_channel, (RedisChannel _, RedisValue value) =>
+        {
+            var message = value.ToMessage();
+            var isSelf = message.Id == Id;
+            if (!(isSelf && _options.IgnoreSelf))
             {
-                var message = value.ToMessage<TMessage>();
-                var isSelf = message.Id == WatcherOption.LocalId;
-                if (!(isSelf && WatcherOption.IgnoreSelf))
+                if (_callbackWithMessage != null)
                 {
-                    if (_callbackWithMessage != null)
-                    {
-                        _callbackWithMessage.Invoke(message);
-                    }
-                    else
-                    {
-                        _callback?.Invoke();
-                    }
+                    _callbackWithMessage.Invoke(message);
                 }
-            });
-        }
-
-        private void SubscribeAsync()
-        {
-            _subscriber = _connection.GetSubscriber();
-            
-            _subscriber.Subscribe(_channel, (RedisChannel _, RedisValue value) =>
-            {
-                var message = value.ToMessage<TMessage>();
-                var isSelf = message.Id == WatcherOption.LocalId;
-                if (!(isSelf && WatcherOption.IgnoreSelf))
+                else
                 {
-                    if (_asyncCallbackWithMessage != null)
-                    {
-                        _asyncCallbackWithMessage.Invoke(message);
-                    }
-                    else
-                    {
-                        _asyncCallback?.Invoke();
-                    }
+                    _callback?.Invoke();
                 }
-            });
-        }
-        
-        public virtual void SetUpdateCallback(Action callback)
-        {
-            _callback = callback;
-        }
+            }
+        });
+    }
 
-        public virtual void SetUpdateCallback(Func<Task> callback)
-        {
-            _asyncCallback = callback;
-        }
-        
-        public virtual void SetUpdateCallback(Action<TMessage> callback)
-        {
-            _callbackWithMessage = callback;
-        }
-        
-        public virtual void SetUpdateCallback(Func<TMessage, Task> callback)
-        {
-            _asyncCallbackWithMessage = callback;
-        }
-        
-        public virtual void Update()
-        {
-            var message = new Message
-            {
-                Method = MethodType.Update, Id = WatcherOption.LocalId
-            };
-            _subscriber.Publish(_channel, message.ToRedisValue());
-        }
-        
-        public virtual async Task UpdateAsync()
-        {
-            var message = new Message
-            {
-                Method = MethodType.Update, Id = WatcherOption.LocalId
-            };
-            await _subscriber.PublishAsync(_channel, message.ToRedisValue());
-        }
+    private void SubscribeAsync()
+    {
+        _subscriber = _connection.GetSubscriber();
 
-        public virtual void UpdateForAddPolicy(string sec, string ptype, params string[] param)
+        _subscriber.Subscribe(_channel, (RedisChannel _, RedisValue value) =>
         {
-            var message = new Message
+            var message = value.ToMessage();
+            var isSelf = message.Id == Id;
+            if (!(isSelf && _options.IgnoreSelf))
             {
-                Method = MethodType.UpdateForAddPolicy, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, Params = param
-            };
-            _subscriber.Publish(_channel, message.ToRedisValue());
-        }
-        
-        public virtual async Task UpdateForAddPolicyAsync(string sec, string ptype, params string[] param)
-        {
-            var message = new Message
-            {
-                Method = MethodType.UpdateForAddPolicy, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, Params = param
-            };
-            await _subscriber.PublishAsync(_channel, message.ToRedisValue());
-        }
-        
-        public virtual void UpdateForRemovePolicy(string sec, string ptype, params string[] param) 
-        {
-            var message = new Message
-            {
-                Method = MethodType.UpdateForRemovePolicy, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, Params = param
-            };
-            _subscriber.Publish(_channel, message.ToRedisValue());
-        }
-        
-        public virtual async Task UpdateForRemovePolicyAsync(string sec, string ptype, params string[] param) 
-        {
-            var message = new Message
-            {
-                Method = MethodType.UpdateForRemovePolicy, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, Params = param
-            };
-            await _subscriber.PublishAsync(_channel, message.ToRedisValue());
-        }
-        
-        public virtual void UpdateForRemoveFilteredPolicy(string sec, string ptype, int fieldIndex, params string[] fieldValues) 
-        {
-            var message = new Message
-            {
-                Method = MethodType.UpdateForRemoveFilteredPolicy, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, FieldIndex = fieldIndex, Params = fieldValues
-            };
-            _subscriber.Publish(_channel, message.ToRedisValue());
-        }
-        
-        public virtual async Task UpdateForRemoveFilteredPolicyAsync(string sec, string ptype, int fieldIndex, params string[] fieldValues) 
-        {
-            var message = new Message
-            {
-                Method = MethodType.UpdateForRemoveFilteredPolicy, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, FieldIndex = fieldIndex, Params = fieldValues
-            };
-            await _subscriber.PublishAsync(_channel, message.ToRedisValue());
-        }
-        
-        public virtual void UpdateForSavePolicy(string sec, string ptype, params string[] rules) 
-        {
-            var message = new Message
-            {
-                Method = MethodType.UpdateForSavePolicy, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, Params = rules
-            };
-            _subscriber.Publish(_channel, message.ToRedisValue());
-        }
-        
-        public virtual async Task UpdateForSavePolicyAsync(string sec, string ptype, params string[] rules) 
-        {
-            var message = new Message
-            {
-                Method = MethodType.UpdateForSavePolicy, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, Params = rules
-            };
-            await _subscriber.PublishAsync(_channel, message.ToRedisValue());
-        }
-        
-        public virtual void UpdateForAddPolicies(string sec, string ptype, params string[] rules) 
-        {
-            var message = new Message
-            {
-                Method = MethodType.UpdateForAddPolicies, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, Params = rules
-            };
-            _subscriber.Publish(_channel, message.ToRedisValue());
-        }
-        
-        public virtual async Task UpdateForAddPoliciesAsync(string sec, string ptype, params string[] rules) 
-        {
-            var message = new Message
-            {
-                Method = MethodType.UpdateForAddPolicies, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, Params = rules
-            };
-            await _subscriber.PublishAsync(_channel, message.ToRedisValue());
-        }
-        
-        public virtual void UpdateForRemovePolicies(string sec, string ptype, params string[] rules) 
-        {
-            var message = new Message
-            {
-                Method = MethodType.UpdateForRemovePolicies, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, Params = rules
-            };
-            _subscriber.Publish(_channel, message.ToRedisValue());
-        }
-
-        public virtual async Task UpdateForRemovePoliciesAsync(string sec, string ptype, params string[] rules) 
-        {
-            var message = new Message
-            {
-                Method = MethodType.UpdateForRemovePolicies, Id = WatcherOption.LocalId, Sec = sec, Ptype = ptype, Params = rules
-            };
-            await _subscriber.PublishAsync(_channel, message.ToRedisValue());
-        }
-        
-        public virtual void Close()
-        {
-            _subscriber?.UnsubscribeAll();
-            _connection?.Close();
-        }
+                if (_asyncCallbackWithMessage != null)
+                {
+                    _asyncCallbackWithMessage.Invoke(message);
+                }
+                else
+                {
+                    _asyncCallback?.Invoke();
+                }
+            }
+        });
     }
 }
