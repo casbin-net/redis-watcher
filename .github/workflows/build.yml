@@ -31,10 +31,10 @@ jobs:
       run: choco install redis-64
   
     - name: Start Redis Server
-      run: “C:\ProgramData\chocolatey\lib\redis-64\tools\redis-server.exe”
+      run: "C:\ProgramData\chocolatey\lib\redis-64\tools\redis-server.exe"
 
     - name: Setup .NET SDK
-      uses: actions/setup-dotnet@v2
+      uses: actions/setup-dotnet@v3
       with:
         dotnet-version: |
             6.0.x
@@ -60,11 +60,11 @@ jobs:
       run: |
         dotnet tool install coveralls.net --version 3.0.0 --tool-path tools;
         $CommitAuthor = git show -s --pretty=format:"%cn";
-        echo "Coomit author is: $CommitAuthor";
+        echo "Commit author is: $CommitAuthor";
         $CommitAuthorEmail = git show -s --pretty=format:"%ce";
-        echo "Coomit author email is: $CommitAuthorEmail";
+        echo "Commit author email is: $CommitAuthorEmail";
         $CommitMessage = git show -s --pretty=format:"%s";
-        echo "Coomit message is: $CommitMessage";
+        echo "Commit message is: $CommitMessage";
         cp test-results/**/*.opencover.xml test-results
         tools/csmacnz.Coveralls --opencover -i test-results/coverage.opencover.xml --repoToken $env:COVERALLS_REPO_TOKEN `
         --commitId $env:SHA --commitBranch $env:REF --commitAuthor "$CommitAuthor" `
@@ -117,7 +117,7 @@ jobs:
       run: git tag -l -n
 
     - name: Setup .NET SDK
-      uses: actions/setup-dotnet@v2
+      uses: actions/setup-dotnet@v3
       with:
         dotnet-version: |
             6.0.x
