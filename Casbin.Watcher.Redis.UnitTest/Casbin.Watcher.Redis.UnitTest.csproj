@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net7.0;net8.0;</TargetFrameworks>
+    <TargetFrameworks>net8.0;net7.0;net6.0;</TargetFrameworks>
+    <LangVersion>11</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
@@ -26,11 +27,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="examples\rbac_policy.csv">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="examples\rbac_model.conf">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    <None Update="examples\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 

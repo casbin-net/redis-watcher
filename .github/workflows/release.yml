@@ -38,10 +38,9 @@ jobs:
       uses: actions/setup-dotnet@v2
       with:
         dotnet-version: |
-            3.1.x
-            5.0.x
             6.0.x
             7.0.x
+            8.0.x
         include-prerelease: true
 
     - name: Check .NET info
@@ -74,7 +73,7 @@ jobs:
 
         if($LastExitCode -ne 0)
         {
-            Write-Warning -Message "Can not upload coverage, laat exit code is ${LastExitCode}."
+            Write-Warning -Message "Can not upload coverage, last exit code is ${LastExitCode}."
             $LastExitCode = 0;
         }
 
@@ -120,10 +119,9 @@ jobs:
       uses: actions/setup-dotnet@v2
       with:
         dotnet-version: |
-            3.1.x
-            5.0.x
             6.0.x
             7.0.x
+            8.0.x
         include-prerelease: true
 
     - name: Check .NET info
