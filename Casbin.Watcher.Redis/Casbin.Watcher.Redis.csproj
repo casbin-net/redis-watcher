@@ -23,7 +23,7 @@
   <ItemGroup>
     <PackageReference Include="Casbin.NET" Version="2.1.1" />
     <PackageReference Include="StackExchange.Redis" Version="2.7.17" />
-    <PackageReference Include="System.Text.Json" Version="8.0.1" />
+    <PackageReference Include="System.Text.Json" Version="8.0.1" Condition="'$(TargetFramework)'=='netstandard2.1'" />
   </ItemGroup>
   
   <ItemGroup>
