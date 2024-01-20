@@ -148,14 +148,18 @@ public class RedisWatcher : IWatcher
             var isSelf = message.Id == Id;
             if (!(isSelf && _options.IgnoreSelf))
             {
-                if (_callbackWithMessage != null)
+                try
                 {
-                    _callbackWithMessage.Invoke(message);
+                    if (_callbackWithMessage != null)
+                    {
+                        _callbackWithMessage.Invoke(message);
+                    }
+                    else
+                    {
+                        _callback?.Invoke();
+                    }
                 }
-                else
-                {
-                    _callback?.Invoke();
-                }
+                catch {}
             }
         });
     }
@@ -170,14 +174,18 @@ public class RedisWatcher : IWatcher
             var isSelf = message.Id == Id;
             if (!(isSelf && _options.IgnoreSelf))
             {
-                if (_asyncCallbackWithMessage != null)
+                try
                 {
-                    _asyncCallbackWithMessage.Invoke(message);
+                    if (_asyncCallbackWithMessage != null)
+                    {
+                        _asyncCallbackWithMessage.Invoke(message);
+                    }
+                    else
+                    {
+                        _asyncCallback?.Invoke();
+                    }
                 }
-                else
-                {
-                    _asyncCallback?.Invoke();
-                }
+                catch {}
             }
         });
     }
